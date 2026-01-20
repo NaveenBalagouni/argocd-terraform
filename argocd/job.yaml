@@ -1,0 +1,56 @@
+
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: terraform-job
+  namespace: ssd-opsmx-terraform
+spec:
+  backoffLimit: 1
+  template:
+    spec:
+      serviceAccountName: terraform-sa
+      restartPolicy: Never
+      containers:
+        - name: terraform
+          image: hashicorp/terraform:1.6.0
+          workingDir: /workspace
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -e
+
+
+              echo "Cloning Terraform repo..."
+              git clone --branch ${GIT_BRANCH} ${GIT_REPO_URL} /workspace/ssd-infra
+              cd /workspace/ssd-infra
+
+              echo "Using kubeconfig..."
+              export KUBECONFIG=/root/.kube/config
+
+              echo "Terraform init..."
+              terraform init
+
+              echo "Terraform plan..."
+              terraform plan 
+
+              echo "Terraform apply..."
+              terraform apply -auto-approve 
+
+              echo "Terraform completed successfully"
+          env:
+            - name: GIT_REPO_URL
+              value: "https://github.com/NaveenBalagouni/ssd-use-terraform.git"
+            - name: GIT_BRANCH
+              value: "main"
+          volumeMounts:
+            - name: kubeconfig
+              mountPath: /root/.kube
+              readOnly: true
+            - name: workspace
+              mountPath: /workspace
+      volumes:
+        - name: kubeconfig
+          secret:
+            secretName: kubeconfig
+        - name: workspace
+          emptyDir: {}
