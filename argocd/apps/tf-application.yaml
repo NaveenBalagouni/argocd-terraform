@@ -10,12 +10,12 @@ spec:
   source:
     repoURL: 'https://github.com/NaveenBalagouni/argocd-terraform.git'
     targetRevision: main   # Or a release branch
-    path: 'k8s'           # Path inside repo containing Kubernetes manifests
+    path: 'argocd'           # Path inside repo containing Kubernetes manifests
 
   # Destination defines where to deploy
   destination:
     server: 'https://kubernetes.default.svc'
-    namespace: ssd-terraform
+    namespace: ssd-tf-argocd
 
   syncPolicy:
     automated:
