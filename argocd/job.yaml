@@ -39,7 +39,7 @@ spec:
               echo "Terraform completed successfully"
           env:
             - name: GIT_REPO_URL
-              value: "https://github.com/NaveenBalagouni/ssd-use-terraform.git"
+              value: "https://github.com/NaveenBalagouni/argocd-terraform.git"
             - name: GIT_BRANCH
               value: "main"
           volumeMounts:
