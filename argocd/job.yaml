@@ -3,7 +3,7 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: terraform-job
-  namespace: ssd-opsmx-terraform
+  namespace: ssd-tf-argocd
 spec:
   backoffLimit: 1
   template:
