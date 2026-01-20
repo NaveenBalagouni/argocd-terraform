@@ -28,14 +28,14 @@ variable "ingress_hosts" {
 variable "namespace" {
   description = "Kubernetes namespace to deploy SSD"
   type        = string
-  default     = "ssd-tf"
+  default     = "ssd-tf-argocd"
 }
 
 
 variable "helm_release_name" {
   description = "Name of the Helm release"
   type        = string
-  default     = "ssd-opsmx-terraform"
+  default     = "ssd-argocd-tf"
 }
 
 
