@@ -7,13 +7,13 @@ variable "git_repo_url" {
 variable "git_branch" {
   description = "Git branch to clone (can be updated for upgrades)"
   type        = string
-  default     = "2025-06"
+  default     = "2025-09"
 }
 
 variable "kubeconfig_path" {
   description = "Path to your kubeconfig file"
   type        = string
-  default     = ""
+  default     = "/home/admins/snap/kubectl/ssd-use.config"
 }
 
 
@@ -24,17 +24,11 @@ variable "ingress_hosts" {
   type        = list(string)
 }
 
-# Chart version to deploy/upgrade
-variable "chart_version" {
-  description = "Helm chart version to deploy/upgrade"
-  type        = string
-  default     = "2025.06.02"
-}
 
 variable "namespace" {
   description = "Kubernetes namespace to deploy SSD"
   type        = string
-  default     = "ssd-tf-argocd"
+  default     = "tf-ssd"
 }
 
 
