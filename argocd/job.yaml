@@ -69,14 +69,12 @@ spec:
               echo "Starting SSD upgrade to version ${SSD_TARGET_VERSION}"
 
               terraform version
-              terraform init -upgrade -input=false
-              terraform plan -input=false -out=tfplan -var="ssd_target_version=${SSD_TARGET_VERSION}"
-              terraform apply -auto-approve tfplan
+              terraform init -upgrade 
+              terraform plan 
+              terraform apply -auto-approve 
 
               echo "SSD successfully upgraded to ${SSD_TARGET_VERSION}"
           env:
-            - name: SSD_TARGET_VERSION
-              value: "2.5"
           volumeMounts:
             - name: kubeconfig
               mountPath: /root/.kube
