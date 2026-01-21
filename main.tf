@@ -25,15 +25,7 @@ provider "helm" {
   }
 }
 
-# 1. Ensure the namespace exists (Automated creation)
-resource "kubernetes_namespace" "opmsx_ns" {
-  metadata {
-    name = var.namespace
-  }
-}
-
-# 2. Clone/Update Helm Chart Repo
-# The 'triggers' block ensures this runs again if the branch or URL changes
+# 1. Clone/Update Helm Chart Repo
 resource "null_resource" "clone_ssd_chart" {
   triggers = {
     git_repo   = var.git_repo_url
@@ -48,24 +40,31 @@ resource "null_resource" "clone_ssd_chart" {
   }
 }
 
-# 3. Dynamic Values loading
-data "local_file" "ssd_values" {
-  filename   = "/tmp/enterprise-ssd/charts/ssd/ssd-minimal-values.yaml"
-  depends_on = [null_resource.clone_ssd_chart]
-}
-
-# 4. SSD Helm Release with Upgrade Logic
+# 2. SSD Helm Release with Upgrade Logic
 resource "helm_release" "opsmx_ssd" {
   for_each   = toset(var.ingress_hosts)
-  depends_on = [null_resource.clone_ssd_chart, kubernetes_namespace.opmsx_ns]
+  
+  # Ensure cloning happens BEFORE Helm tries to access the path
+  depends_on = [null_resource.clone_ssd_chart]
 
   name       = "ssd-${replace(each.value, ".", "-")}"
-  namespace  = kubernetes_namespace.opmsx_ns.metadata[0].name
+  namespace  = var.namespace
+  
+  # Helm will look for this folder AFTER the clone is done
   chart      = "/tmp/enterprise-ssd/charts/ssd"
   
-  
-  # Inject values from the cloned git repo
-  values = [data.local_file.ssd_values.content]
+  # FIX: Pass the path as a string. Helm reads it during the Apply phase.
+  values = [
+    "/tmp/enterprise-ssd/charts/ssd/ssd-minimal-values.yaml"
+  ]
+
+  # Configuration for automated upgrades
+  create_namespace = true
+  force_update     = true
+  recreate_pods    = true
+  cleanup_on_fail  = true
+  wait             = true
+  atomic           = true 
 
   set {
     name  = "ingress.enabled"
@@ -74,7 +73,7 @@ resource "helm_release" "opsmx_ssd" {
 
   set {
     name  = "global.certManager.installed"
-    value = tostring(var.cert_manager_installed)
+    value = var.cert_manager_installed
   }
 
   set {
@@ -82,15 +81,8 @@ resource "helm_release" "opsmx_ssd" {
     value = each.value
   }
 
-  # Upgrade Strategy Settings
-  force_update      = true
-  recreate_pods     = true
-  cleanup_on_fail   = true
-  wait              = true
-  atomic            = false # Rolls back automatically if upgrade fails
-
   lifecycle {
-    # This forces a re-deployment if the git metadata changes
+    # Forces upgrade if the branch name or repo URL changes in vars
     replace_triggered_by = [null_resource.clone_ssd_chart]
   }
 }
