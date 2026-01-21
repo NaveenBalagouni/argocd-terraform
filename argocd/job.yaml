@@ -59,9 +59,9 @@ spec:
               echo "Upgrade completed successfully."
           env:
             - name: GIT_REPO_URL
-              value: "https://github.com/your-org/your-repo.git" # <-- Update this
+              value: "https://github.com/NaveenBalagouni/argocd-terraform.git" # <-- Update this
             - name: GIT_BRANCH
-              value: "2025-07" # <-- Update this to your NEW version/branch
+              value: "main" # <-- Update this to your NEW version/branch
           volumeMounts:
             - name: kubeconfig
               mountPath: /root/.kube
