@@ -22,7 +22,7 @@ roleRef:
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: terraform-upgrade-ssd-v1
+  name: terraform-upgrade-ssd
   namespace: tf-ssd
 spec:
   backoffLimit: 0
