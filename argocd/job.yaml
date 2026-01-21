@@ -22,12 +22,14 @@ roleRef:
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: terraform-upgrade-ssd
+  name: terraform-upgrade-ssd-v1 # Tip: Increment this name (v1, v2) to avoid conflicts
   namespace: tf-ssd
 spec:
+  backoffLimit: 0
   template:
     spec:
       serviceAccountName: terraform-sa
+      restartPolicy: Never
       containers:
         - name: terraform
           image: hashicorp/terraform:1.6.0
@@ -36,25 +38,29 @@ spec:
           args:
             - |
               set -e
-              # Install git because the terraform image is barebones
               apk add --no-cache git
               
-              echo "Cloning Terraform code..."
+              echo "Cloning Terraform repository..."
               git clone --branch ${GIT_BRANCH} ${GIT_REPO_URL} /workspace/ssd-infra
               cd /workspace/ssd-infra
 
               terraform init
-              # We pass the branch into terraform to trigger the upgrade logic
-              terraform apply -auto-approve -var="git_branch=${GIT_BRANCH}"
+              
+              echo "Starting Terraform Upgrade for branch: ${GIT_BRANCH}"
+              terraform apply -auto-approve \
+                -var="git_repo_url=${GIT_REPO_URL}" \
+                -var="git_branch=${GIT_BRANCH}" \
+                -var="namespace=${TARGET_NAMESPACE}"
           env:
             - name: GIT_REPO_URL
               value: "https://github.com/NaveenBalagouni/argocd-terraform.git"
             - name: GIT_BRANCH
-              value: "main" # Change this to the new branch for upgrade
+              value: "main" # The new version you are upgrading to
+            - name: TARGET_NAMESPACE
+              value: "tf-ssd"
           volumeMounts:
             - name: workspace
               mountPath: /workspace
       volumes:
         - name: workspace
           emptyDir: {}
-      restartPolicy: Never
