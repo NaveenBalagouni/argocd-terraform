@@ -54,7 +54,7 @@ spec:
             - |
               set -e
               echo "Cloning SSD infra repo..."
-              git clone --depth=1 https://github.com/NaveenBalagouni/argocd-terraform.git /workspace/ssd-infra
+              git clone --branch ${GIT_BRANCH} ${GIT_REPO_URL} /workspace/ssd-infra
           volumeMounts:
             - name: workspace
               mountPath: /workspace
@@ -77,6 +77,11 @@ spec:
               terraform apply -auto-approve
 
               echo "SSD upgrade completed"
+          env:
+            - name: GIT_REPO_URL
+              value: "https://github.com/NaveenBalagouni/argocd-terraform.git"
+            - name: GIT_BRANCH
+              value: "main"
           volumeMounts:
             - name: kubeconfig
               mountPath: /root/.kube
