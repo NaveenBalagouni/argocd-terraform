@@ -16,41 +16,24 @@ terraform {
 }
 
 provider "kubernetes" {
-  config_path = var.kubeconfig_path != "" ? var.kubeconfig_path : null
+  config_path = "/home/admins/snap/kubectl/ssd-use.config"
 }
 
 provider "helm" {
   kubernetes {
-    config_path = var.kubeconfig_path != "" ? var.kubeconfig_path : null
+    config_path = "/home/admins/snap/kubectl/ssd-use.config"
   }
 }
 
-# Detect or create namespace
-# -----------------------------
-data "kubernetes_namespace" "opmsx_ns" {
-  metadata {
-    name = var.namespace
-  }
-}
-
-# Step 1: Create namespace
+# 1. Ensure the namespace exists (Automated creation)
 resource "kubernetes_namespace" "opmsx_ns" {
   metadata {
     name = var.namespace
   }
-
-  lifecycle {
-    prevent_destroy = true
-  }
 }
 
-
-
-
-
-# -----------------------------
-# Step 1: Clone Helm Chart Repo
-# -----------------------------
+# 2. Clone/Update Helm Chart Repo
+# The 'triggers' block ensures this runs again if the branch or URL changes
 resource "null_resource" "clone_ssd_chart" {
   triggers = {
     git_repo   = var.git_repo_url
@@ -61,34 +44,28 @@ resource "null_resource" "clone_ssd_chart" {
     command = <<EOT
       rm -rf /tmp/enterprise-ssd
       git clone --branch ${var.git_branch} ${var.git_repo_url} /tmp/enterprise-ssd
-      ls -l /tmp/enterprise-ssd/charts/ssd
     EOT
   }
 }
 
-# -----------------------------
-# Step 2: Read values.yaml
-# -----------------------------
+# 3. Dynamic Values loading
 data "local_file" "ssd_values" {
   filename   = "/tmp/enterprise-ssd/charts/ssd/ssd-minimal-values.yaml"
   depends_on = [null_resource.clone_ssd_chart]
 }
 
-# -----------------------------
-# Step 3: Deploy SSD Helm Releases
-# -----------------------------
+# 4. SSD Helm Release with Upgrade Logic
 resource "helm_release" "opsmx_ssd" {
-  for_each = toset(var.ingress_hosts)
+  for_each   = toset(var.ingress_hosts)
+  depends_on = [null_resource.clone_ssd_chart, kubernetes_namespace.opmsx_ns]
 
-  depends_on = [null_resource.clone_ssd_chart]
-
-  name      = "ssd-argocd-tf"
-  namespace = var.namespace
-  chart     = "/tmp/enterprise-ssd/charts/ssd"
-  values    = [data.local_file.ssd_values.content]
-  version   = var.chart_version  # make version dynamic
+  name       = "ssd-${replace(each.value, ".", "-")}"
+  namespace  = kubernetes_namespace.opmsx_ns.metadata[0].name
+  chart      = "/tmp/enterprise-ssd/charts/ssd"
   
   
+  # Inject values from the cloned git repo
+  values = [data.local_file.ssd_values.content]
 
   set {
     name  = "ingress.enabled"
@@ -97,25 +74,23 @@ resource "helm_release" "opsmx_ssd" {
 
   set {
     name  = "global.certManager.installed"
-    value = true
+    value = tostring(var.cert_manager_installed)
   }
 
   set {
     name  = "global.ssdUI.host"
-    value = each.key
+    value = each.value
   }
 
-  create_namespace = false
-  force_update     = true
-  atomic       = true
-  recreate_pods    = true
-  cleanup_on_fail  = true
-  wait             = true
+  # Upgrade Strategy Settings
+  force_update      = true
+  recreate_pods     = true
+  cleanup_on_fail   = true
+  wait              = true
+  atomic            = false # Rolls back automatically if upgrade fails
 
   lifecycle {
-    # Combine all attributes you want to ignore in a single ignore_changes list
-    ignore_changes = [values]
+    # This forces a re-deployment if the git metadata changes
     replace_triggered_by = [null_resource.clone_ssd_chart]
-    
   }
 }
