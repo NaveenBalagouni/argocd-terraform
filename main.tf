@@ -107,7 +107,7 @@ resource "helm_release" "opsmx_ssd" {
 
   create_namespace = false
   force_update     = true
-  atomic       = false
+  atomic       = true
   recreate_pods    = true
   cleanup_on_fail  = true
   wait             = true
