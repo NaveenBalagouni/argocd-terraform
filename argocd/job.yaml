@@ -22,7 +22,7 @@ roleRef:
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: terraform-upgrade-ssd-v1 # Tip: Increment this name (v1, v2) to avoid conflicts
+  name: terraform-upgrade-ssd-v1
   namespace: tf-ssd
 spec:
   backoffLimit: 0
@@ -40,29 +40,26 @@ spec:
               set -e
               apk add --no-cache git
               
+              # STEP 1: Pre-clone the repo to /tmp so Terraform doesn't fail "path check"
+              echo "Preparing Helm chart files..."
+              rm -rf /tmp/enterprise-ssd
+              git clone --branch ${GIT_BRANCH} ${GIT_REPO_URL} /tmp/enterprise-ssd
 
-              # 2. Clone the actual Terraform code
+              # STEP 2: Clone the Terraform project files
+              echo "Cloning Terraform project..."
+              git clone --branch ${GIT_BRANCH} ${GIT_REPO_URL} /workspace/ssd-infra
+              cd /workspace/ssd-infra
 
-              echo "Cloning Terraform code..."
-              
-              echo "Cloning Terraform repository..."
-               git clone --branch ${GIT_BRANCH} ${GIT_REPO_URL} /tmp/enterprise-ssd
-              cd /tmp/enterprise-ssd
-
+              # STEP 3: Run Terraform
               terraform init
-              
-              echo "Starting Terraform Upgrade for branch: ${GIT_BRANCH}"
               terraform apply -auto-approve \
                 -var="git_repo_url=${GIT_REPO_URL}" \
-                -var="git_branch=${GIT_BRANCH}" \
-                -var="namespace=${TARGET_NAMESPACE}"
+                -var="git_branch=${GIT_BRANCH}"
           env:
             - name: GIT_REPO_URL
               value: "https://github.com/NaveenBalagouni/argocd-terraform.git"
             - name: GIT_BRANCH
-              value: "main" # The new version you are upgrading to
-            - name: TARGET_NAMESPACE
-              value: "tf-ssd"
+              value: "main" # Update this for your upgrade
           volumeMounts:
             - name: workspace
               mountPath: /workspace
