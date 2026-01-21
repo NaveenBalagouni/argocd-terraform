@@ -25,11 +25,9 @@ metadata:
   name: terraform-upgrade-ssd
   namespace: tf-ssd
 spec:
-  backoffLimit: 0 # We want it to fail fast if there's a config error
   template:
     spec:
       serviceAccountName: terraform-sa
-      restartPolicy: Never
       containers:
         - name: terraform
           image: hashicorp/terraform:1.6.0
@@ -38,39 +36,25 @@ spec:
           args:
             - |
               set -e
-              
-              # 1. Setup Git (Required for cloning)
+              # Install git because the terraform image is barebones
               apk add --no-cache git
               
-              # 2. Clone the repo using the UPGRADE branch
-              echo "Cloning Branch: ${GIT_BRANCH}..."
+              echo "Cloning Terraform code..."
               git clone --branch ${GIT_BRANCH} ${GIT_REPO_URL} /workspace/ssd-infra
               cd /workspace/ssd-infra
 
-              # 3. Initialization
-              echo "Initializing Terraform..."
               terraform init
-
-              # 4. Apply Upgrade
-              # We pass the branch as a variable to ensure Terraform state is updated
-              echo "Applying Upgrade for branch ${GIT_BRANCH}..."
+              # We pass the branch into terraform to trigger the upgrade logic
               terraform apply -auto-approve -var="git_branch=${GIT_BRANCH}"
-
-              echo "Upgrade completed successfully."
           env:
             - name: GIT_REPO_URL
-              value: "https://github.com/NaveenBalagouni/argocd-terraform.git" # <-- Update this
+              value: "https://github.com/NaveenBalagouni/argocd-terraform.git"
             - name: GIT_BRANCH
-              value: "main" # <-- Update this to your NEW version/branch
+              value: "2025-06" # Change this to the new branch for upgrade
           volumeMounts:
-            - name: kubeconfig
-              mountPath: /root/.kube
-              readOnly: true
             - name: workspace
               mountPath: /workspace
       volumes:
-        - name: kubeconfig
-          secret:
-            secretName: kubeconfig # Ensure this secret exists with a valid config
         - name: workspace
           emptyDir: {}
+      restartPolicy: Never
