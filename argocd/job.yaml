@@ -70,15 +70,13 @@ spec:
               terraform version
 
               echo "Terraform init (upgrade providers)"
-              terraform init -upgrade -input=false
+              terraform init -upgrade 
 
               echo "Terraform plan for SSD upgrade"
-              terraform plan \
-                -var="ssd_target_version=${SSD_TARGET_VERSION}" \
-                -out=upgrade.tfplan
+              terraform plan 
 
               echo "Applying SSD upgrade"
-              terraform apply -auto-approve upgrade.tfplan
+              terraform apply -auto-approve 
 
               echo "SSD successfully upgraded to ${SSD_TARGET_VERSION}"
           volumeMounts:
