@@ -40,9 +40,14 @@ spec:
               set -e
               apk add --no-cache git
               
+
+              # 2. Clone the actual Terraform code
+
+              echo "Cloning Terraform code..."
+              
               echo "Cloning Terraform repository..."
-              git clone --branch ${GIT_BRANCH} ${GIT_REPO_URL} /workspace/ssd-infra
-              cd /workspace/ssd-infra
+               git clone --branch ${GIT_BRANCH} ${GIT_REPO_URL} /tmp/enterprise-ssd
+              cd /tmp/enterprise-ssd
 
               terraform init
               
