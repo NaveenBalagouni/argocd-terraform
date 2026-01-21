@@ -22,10 +22,10 @@ roleRef:
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: terraform-job
+  name: terraform-upgrade-ssd
   namespace: tf-ssd
 spec:
-  backoffLimit: 1
+  backoffLimit: 0 # We want it to fail fast if there's a config error
   template:
     spec:
       serviceAccountName: terraform-sa
@@ -38,30 +38,30 @@ spec:
           args:
             - |
               set -e
-
-
-              echo "Cloning Terraform repo..."
+              
+              # 1. Setup Git (Required for cloning)
+              apk add --no-cache git
+              
+              # 2. Clone the repo using the UPGRADE branch
+              echo "Cloning Branch: ${GIT_BRANCH}..."
               git clone --branch ${GIT_BRANCH} ${GIT_REPO_URL} /workspace/ssd-infra
               cd /workspace/ssd-infra
 
-              echo "Using kubeconfig..."
-              export KUBECONFIG=/root/.kube/config
-
-              echo "Terraform init..."
+              # 3. Initialization
+              echo "Initializing Terraform..."
               terraform init
 
-              echo "Terraform plan..."
-              terraform plan 
+              # 4. Apply Upgrade
+              # We pass the branch as a variable to ensure Terraform state is updated
+              echo "Applying Upgrade for branch ${GIT_BRANCH}..."
+              terraform apply -auto-approve -var="git_branch=${GIT_BRANCH}"
 
-              echo "Terraform apply..."
-              terraform apply -auto-approve 
-
-              echo "Terraform completed successfully"
+              echo "Upgrade completed successfully."
           env:
             - name: GIT_REPO_URL
-              value: "https://github.com/NaveenBalagouni/argocd-terraform.git"
+              value: "https://github.com/your-org/your-repo.git" # <-- Update this
             - name: GIT_BRANCH
-              value: "main"
+              value: "2025-07" # <-- Update this to your NEW version/branch
           volumeMounts:
             - name: kubeconfig
               mountPath: /root/.kube
@@ -71,6 +71,6 @@ spec:
       volumes:
         - name: kubeconfig
           secret:
-            secretName: kubeconfig
+            secretName: kubeconfig # Ensure this secret exists with a valid config
         - name: workspace
           emptyDir: {}
