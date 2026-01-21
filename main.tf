@@ -55,7 +55,6 @@ resource "null_resource" "clone_ssd_chart" {
   triggers = {
     git_repo   = var.git_repo_url
     git_branch = var.git_branch
-    version   = var.chart_version  # make version dynamic
   }
 
   provisioner "local-exec" {
@@ -115,7 +114,7 @@ resource "helm_release" "opsmx_ssd" {
 
   lifecycle {
     # Combine all attributes you want to ignore in a single ignore_changes list
-    ignore_changes = [values, chart]
+    ignore_changes = [values]
     replace_triggered_by = [null_resource.clone_ssd_chart]
     
   }
