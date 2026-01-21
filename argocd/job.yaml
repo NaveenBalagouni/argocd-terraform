@@ -16,15 +16,16 @@ roleRef:
   kind: ClusterRole
   name: cluster-admin
   apiGroup: rbac.authorization.k8s.io
----
-apiVersion: batch/v1
+---apiVersion: batch/v1
 kind: Job
 metadata:
-  name: ssd-upgrade
+  name: ssd-upgrade-to-2-5
   namespace: ssd-tf-argocd
   labels:
     app: ssd
     operation: upgrade
+  annotations:
+    argocd.argoproj.io/sync-options: Replace=true
 spec:
   backoffLimit: 1
   ttlSecondsAfterFinished: 7200
@@ -46,9 +47,10 @@ spec:
             - |
               set -e
               echo "Cloning SSD infra repo..."
-              git clone --depth=1 \
-                https://github.com/NaveenBalagouni/argocd-terraform.git \
-                /workspace/ssd-infra
+              git clone --depth=1 "${GIT_REPO_URL}" /workspace/ssd-infra
+          env:
+            - name: GIT_REPO_URL
+              value: "https://github.com/NaveenBalagouni/argocd-terraform.git"
           volumeMounts:
             - name: workspace
               mountPath: /workspace
@@ -56,29 +58,24 @@ spec:
       containers:
         - name: terraform-upgrade
           image: hashicorp/terraform:1.6.0
-          workingDir: /workspace/ssd-infra/terraform
+          workingDir: /workspace/ssd-infra
           command: ["/bin/sh", "-c"]
           args:
             - |
               set -e
 
               export KUBECONFIG=/root/.kube/config
-              export SSD_TARGET_VERSION=2.5
-
               echo "Starting SSD upgrade to version ${SSD_TARGET_VERSION}"
 
               terraform version
-
-              echo "Terraform init (upgrade providers)"
-              terraform init -upgrade 
-
-              echo "Terraform plan for SSD upgrade"
-              terraform plan 
-
-              echo "Applying SSD upgrade"
-              terraform apply -auto-approve 
+              terraform init -upgrade -input=false
+              terraform plan -input=false -out=tfplan -var="ssd_target_version=${SSD_TARGET_VERSION}"
+              terraform apply -auto-approve tfplan
 
               echo "SSD successfully upgraded to ${SSD_TARGET_VERSION}"
+          env:
+            - name: SSD_TARGET_VERSION
+              value: "2.5"
           volumeMounts:
             - name: kubeconfig
               mountPath: /root/.kube
@@ -92,3 +89,4 @@ spec:
             secretName: kubeconfig
         - name: workspace
           emptyDir: {}
+
