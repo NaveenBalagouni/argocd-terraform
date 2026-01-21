@@ -16,12 +16,12 @@ terraform {
 }
 
 provider "kubernetes" {
-  config_path = "/home/admins/snap/kubectl/ssd-use.config"
+  config_path = var.kubeconfig_path != "" ? var.kubeconfig_path : null
 }
 
 provider "helm" {
   kubernetes {
-    config_path = "/home/admins/snap/kubectl/ssd-use.config"
+    config_path = var.kubeconfig_path != "" ? var.kubeconfig_path : null
   }
 }
 
