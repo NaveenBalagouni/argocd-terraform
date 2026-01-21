@@ -1,5 +1,5 @@
 git_repo_url           = "https://github.com/OpsMx/enterprise-ssd.git"
-git_branch             = "2025-05" # initial installation branch
+git_branch             = "2025-06" # initial installation branch
 kubeconfig_path        = ""
 ingress_hosts          = ["ssd-tf-argocd.ssd-uat.opsmx.org"]
 namespace              = "ssd-tf-argocd"
