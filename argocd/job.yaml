@@ -50,7 +50,7 @@ spec:
             - name: GIT_REPO_URL
               value: "https://github.com/NaveenBalagouni/argocd-terraform.git"
             - name: GIT_BRANCH
-              value: "2025-06" # Change this to the new branch for upgrade
+              value: "main" # Change this to the new branch for upgrade
           volumeMounts:
             - name: workspace
               mountPath: /workspace
