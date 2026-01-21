@@ -11,7 +11,6 @@ terraform {
   }
 }
 
-# Leave config_path empty if running inside a K8s Job with a ServiceAccount
 provider "kubernetes" {
   config_path = var.kubeconfig_path != "" ? var.kubeconfig_path : null
 }
@@ -40,13 +39,16 @@ resource "null_resource" "clone_ssd_chart" {
 # 2. SSD Helm Release
 resource "helm_release" "opsmx_ssd" {
   for_each   = toset(var.ingress_hosts)
+  
+  # This ensures the clone happens first
   depends_on = [null_resource.clone_ssd_chart]
 
   name       = "ssd-${replace(each.value, ".", "-")}"
   namespace  = var.namespace
+  
+  # FIX: We use a path that Terraform won't validate until it's actually applying
   chart      = "/tmp/enterprise-ssd/charts/ssd"
   
-  # Pass the path as a string to avoid Plan-time failures
   values = [
     "/tmp/enterprise-ssd/charts/ssd/ssd-minimal-values.yaml"
   ]
