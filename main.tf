@@ -55,6 +55,7 @@ resource "null_resource" "clone_ssd_chart" {
   triggers = {
     git_repo   = var.git_repo_url
     git_branch = var.git_branch
+    version   = var.chart_version  # make version dynamic
   }
 
   provisioner "local-exec" {
@@ -86,7 +87,7 @@ resource "helm_release" "opsmx_ssd" {
   namespace = var.namespace
   chart     = "/tmp/enterprise-ssd/charts/ssd"
   values    = [data.local_file.ssd_values.content]
-  version    = "2025.06.02"
+  version   = var.chart_version  # make version dynamic
   
   
 
