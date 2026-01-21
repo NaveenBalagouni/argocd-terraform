@@ -1,71 +1,74 @@
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: terraform-sa
-  namespace: ssd-tf-argocd
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: terraform-sa-admin
-subjects:
-  - kind: ServiceAccount
-    name: terraform-sa
-    namespace: ssd-tf-argocd
-roleRef:
-  kind: ClusterRole
-  name: cluster-admin
-  apiGroup: rbac.authorization.k8s.io
----
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: terraform-job
+  name: ssd-upgrade
   namespace: ssd-tf-argocd
+  labels:
+    app: ssd
+    operation: upgrade
 spec:
   backoffLimit: 1
+  ttlSecondsAfterFinished: 7200
   template:
     spec:
       serviceAccountName: terraform-sa
       restartPolicy: Never
+
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+
+      initContainers:
+        - name: clone-ssd-infra
+          image: alpine/git:2.43.0
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -e
+              echo "Cloning SSD infra repo..."
+              git clone --depth=1 \
+                https://github.com/NaveenBalagouni/argocd-terraform.git \
+                /workspace/ssd-infra
+          volumeMounts:
+            - name: workspace
+              mountPath: /workspace
+
       containers:
-        - name: terraform
+        - name: terraform-upgrade
           image: hashicorp/terraform:1.6.0
-          workingDir: /workspace
+          workingDir: /workspace/ssd-infra/terraform
           command: ["/bin/sh", "-c"]
           args:
             - |
               set -e
 
-
-              echo "Cloning Terraform repo..."
-              git clone --branch ${GIT_BRANCH} ${GIT_REPO_URL} /workspace/ssd-infra
-              cd /workspace/ssd-infra
-
-              echo "Using kubeconfig..."
               export KUBECONFIG=/root/.kube/config
+              export SSD_TARGET_VERSION=2.5
 
-              echo "Terraform init..."
-              terraform init
+              echo "Starting SSD upgrade to version ${SSD_TARGET_VERSION}"
 
-              echo "Terraform plan..."
-              terraform plan 
+              terraform version
 
-              echo "Terraform apply..."
-              terraform apply -auto-approve 
+              echo "Terraform init (upgrade providers)"
+              terraform init -upgrade -input=false
 
-              echo "Terraform completed successfully"
-          env:
-            - name: GIT_REPO_URL
-              value: "https://github.com/NaveenBalagouni/argocd-terraform.git"
-            - name: GIT_BRANCH
-              value: "main"
+              echo "Terraform plan for SSD upgrade"
+              terraform plan \
+                -var="ssd_target_version=${SSD_TARGET_VERSION}" \
+                -out=upgrade.tfplan
+
+              echo "Applying SSD upgrade"
+              terraform apply -auto-approve upgrade.tfplan
+
+              echo "SSD successfully upgraded to ${SSD_TARGET_VERSION}"
           volumeMounts:
             - name: kubeconfig
               mountPath: /root/.kube
               readOnly: true
             - name: workspace
               mountPath: /workspace
+
       volumes:
         - name: kubeconfig
           secret:
