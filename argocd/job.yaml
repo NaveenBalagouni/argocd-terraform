@@ -20,7 +20,7 @@ roleRef:
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: ssd-upgrade-to-2-5
+  name: ssd-upgrade
   namespace: ssd-tf-argocd
   labels:
     app: ssd
@@ -30,7 +30,13 @@ metadata:
 spec:
   backoffLimit: 1
   ttlSecondsAfterFinished: 7200
+  selector:
+    matchLabels:
+      job-name: ssd-upgrade
   template:
+    metadata:
+      labels:
+        job-name: ssd-upgrade
     spec:
       serviceAccountName: terraform-sa
       restartPolicy: Never
@@ -48,10 +54,7 @@ spec:
             - |
               set -e
               echo "Cloning SSD infra repo..."
-              git clone --depth=1 "${GIT_REPO_URL}" /workspace/ssd-infra
-          env:
-            - name: GIT_REPO_URL
-              value: "https://github.com/NaveenBalagouni/argocd-terraform.git"
+              git clone --depth=1 https://github.com/NaveenBalagouni/argocd-terraform.git /workspace/ssd-infra
           volumeMounts:
             - name: workspace
               mountPath: /workspace
@@ -66,15 +69,14 @@ spec:
               set -e
 
               export KUBECONFIG=/root/.kube/config
-              echo "Starting SSD upgrade to version ${SSD_TARGET_VERSION}"
+              echo "Starting SSD upgrade"
 
               terraform version
-              terraform init -upgrade 
-              terraform plan 
-              terraform apply -auto-approve 
+              terraform init -upgrade
+              terraform plan
+              terraform apply -auto-approve
 
-              echo "SSD successfully upgraded to ${SSD_TARGET_VERSION}"
-          env:
+              echo "SSD upgrade completed"
           volumeMounts:
             - name: kubeconfig
               mountPath: /root/.kube
@@ -88,4 +90,3 @@ spec:
             secretName: kubeconfig
         - name: workspace
           emptyDir: {}
-
