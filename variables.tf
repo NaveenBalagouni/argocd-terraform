@@ -24,6 +24,12 @@ variable "ingress_hosts" {
   type        = list(string)
 }
 
+# Chart version to deploy/upgrade
+variable "chart_version" {
+  description = "Helm chart version to deploy/upgrade"
+  type        = string
+  default     = "2025.06.02"
+}
 
 variable "namespace" {
   description = "Kubernetes namespace to deploy SSD"
