@@ -8,13 +8,10 @@ terraform {
       source  = "hashicorp/kubernetes"
       version = "~> 2.23"
     }
-    local = {
-      source  = "hashicorp/local"
-      version = "~> 2.4"
-    }
   }
 }
 
+# Leave config_path empty if running inside a K8s Job with a ServiceAccount
 provider "kubernetes" {
   config_path = var.kubeconfig_path != "" ? var.kubeconfig_path : null
 }
@@ -40,31 +37,25 @@ resource "null_resource" "clone_ssd_chart" {
   }
 }
 
-# 2. SSD Helm Release with Upgrade Logic
+# 2. SSD Helm Release
 resource "helm_release" "opsmx_ssd" {
   for_each   = toset(var.ingress_hosts)
-  
-  # Ensure cloning happens BEFORE Helm tries to access the path
   depends_on = [null_resource.clone_ssd_chart]
 
   name       = "ssd-${replace(each.value, ".", "-")}"
   namespace  = var.namespace
-  
-  # Helm will look for this folder AFTER the clone is done
   chart      = "/tmp/enterprise-ssd/charts/ssd"
   
-  # FIX: Pass the path as a string. Helm reads it during the Apply phase.
+  # Pass the path as a string to avoid Plan-time failures
   values = [
     "/tmp/enterprise-ssd/charts/ssd/ssd-minimal-values.yaml"
   ]
 
-  # Configuration for automated upgrades
   create_namespace = true
   force_update     = true
   recreate_pods    = true
   cleanup_on_fail  = true
   wait             = true
-  atomic           = true 
 
   set {
     name  = "ingress.enabled"
@@ -73,7 +64,7 @@ resource "helm_release" "opsmx_ssd" {
 
   set {
     name  = "global.certManager.installed"
-    value = var.cert_manager_installed
+    value = tostring(var.cert_manager_installed)
   }
 
   set {
@@ -82,7 +73,6 @@ resource "helm_release" "opsmx_ssd" {
   }
 
   lifecycle {
-    # Forces upgrade if the branch name or repo URL changes in vars
     replace_triggered_by = [null_resource.clone_ssd_chart]
   }
 }
