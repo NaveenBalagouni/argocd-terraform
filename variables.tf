@@ -13,7 +13,7 @@ variable "git_branch" {
 variable "kubeconfig_path" {
   description = "Path to your kubeconfig file"
   type        = string
-  default     = "/home/admins/snap/kubectl/ssd-use.config"
+  default     = ""
 }
 
 
