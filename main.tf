@@ -59,7 +59,7 @@ resource "helm_release" "opsmx_ssd" {
   # We pass the PATH as a string, NOT the content via a function.
   # This prevents Terraform from looking for the file during the "Refresh" phase.
   values = [
-    "/tmp/enterprise-ssd/charts/ssd/ssd-minimal-values.yaml"
+    templatefile("/tmp/enterprise-ssd/charts/ssd/ssd-minimal-values.yaml")
   ]
 
   create_namespace = false
