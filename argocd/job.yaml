@@ -62,7 +62,7 @@ spec:
 
           env:
             - name: TF_REPO_URL
-              value: "https://github.com/your-org/ssd-terraform.git"
+              value: "https://github.com/NaveenBalagouni/argocd-terraform.git"
             - name: TF_BRANCH
               value: "main"
             - name: SSD_NAMESPACE
