@@ -78,9 +78,14 @@ spec:
               value: "true"
 
           volumeMounts:
-            - name: workspace
-              mountPath: /workspace
-
-      volumes:
-        - name: workspace
-          emptyDir: {}
+           - name: kubeconfig
+             mountPath: /root/.kube
+             readOnly: true
+           - name: workspace
+             mountPath: /workspace
+     volumes:
+       - name: kubeconfig
+         secret:
+           secretName: kubeconfig
+       - name: workspace
+         emptyDir: {}
