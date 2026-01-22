@@ -71,7 +71,7 @@ resource "helm_release" "opsmx_ssd" {
   chart = "/tmp/enterprise-ssd/charts/ssd"
 
   values = [
-    file("/tmp/enterprise-ssd/charts/ssd/ssd-minimal-values.yaml")
+    "/tmp/enterprise-ssd/charts/ssd/ssd-minimal-values.yaml"
   ]
 
   # Deployment Settings
