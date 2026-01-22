@@ -62,14 +62,14 @@ spec:
               echo "Terraform SSD deployment completed successfully."
           env:
             - name: GIT_REPO_URL
-              value: "https://github.com/NaveenBalagouni/argocd-terraform.git"
+              value: "https://github.com/OpsMx/enterprise-ssd.git"
             - name: GIT_BRANCH
-              value: "main"
+              value: "2025-11"
 
             - name: TF_REPO_URL
-              value: "ttps://github.com/OpsMx/enterprise-ssd.git""
+              value: "https://github.com/NaveenBalagouni/argocd-terraform.git"
             - name: TF_BRANCH
-              value: "2025-11"
+              value: "main"
 
             - name: SSD_NAMESPACE
               value: "tf-ssd"
