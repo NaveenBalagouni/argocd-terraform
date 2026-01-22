@@ -33,7 +33,8 @@ resource "kubernetes_namespace" "ssd" {
   }
 
   lifecycle {
-    prevent_destroy = true
+    prevent_destroy = false
+    ignore_changes  = [metadata[0].annotations, metadata[0].labels]
   }
 }
 
