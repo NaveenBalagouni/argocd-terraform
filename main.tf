@@ -37,7 +37,12 @@ resource "kubernetes_namespace" "ssd" {
     ignore_changes  = [metadata[0].annotations, metadata[0].labels]
   }
 }
-
+# Clone the Helm chart repository
+resource "null_resource" "clone_ssd_chart" {
+  triggers = {
+    git_repo  = var.git_repo_url
+    git_branch = var.git_branch
+  }
 ########################
 # OpsMx SSD Helm Release
 ########################
