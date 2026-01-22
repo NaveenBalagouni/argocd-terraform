@@ -93,3 +93,4 @@ resource "helm_release" "opsmx_ssd" {
     # This forces a re-deployment if the git metadata changes
     replace_triggered_by = [null_resource.clone_ssd_chart]
   }
+}
