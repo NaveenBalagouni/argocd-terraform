@@ -25,7 +25,7 @@ provider "helm" {
 }
 
 ########################
-# Namespace (Protected)
+# Namespace
 ########################
 resource "kubernetes_namespace" "ssd" {
   metadata {
@@ -33,7 +33,8 @@ resource "kubernetes_namespace" "ssd" {
   }
 
   lifecycle {
-    prevent_destroy = false
+    # Set to true if you want to ensure Terraform never deletes this namespace
+    prevent_destroy = false 
     ignore_changes  = all
   }
 }
@@ -48,12 +49,14 @@ resource "null_resource" "clone_ssd_chart" {
   }
 
   provisioner "local-exec" {
-    command = <<EOT
-      rm -rf /tmp/enterprise-ssd
-      git clone --branch ${var.git_branch} ${var.git_repo_url} /tmp/enterprise-ssd
+    # This prevents the "No such file or directory" error by giving git a stable home
+    working_dir = "/tmp"
+    command     = <<EOT
+      rm -rf enterprise-ssd
+      git clone --branch ${var.git_branch} ${var.git_repo_url} enterprise-ssd
     EOT
   }
-}  # <-- Closing brace added here
+}
 
 ########################
 # OpsMx SSD Helm Release
@@ -64,6 +67,7 @@ resource "helm_release" "opsmx_ssd" {
   name       = "ssd-${replace(each.value, ".", "-")}"
   namespace  = kubernetes_namespace.ssd.metadata[0].name
 
+  # Reference the absolute path from the clone location
   chart = "/tmp/enterprise-ssd/charts/ssd"
 
   values = [
@@ -71,7 +75,6 @@ resource "helm_release" "opsmx_ssd" {
   ]
 
   create_namespace = false
-
   atomic           = true
   cleanup_on_fail  = true
   wait             = true
@@ -97,7 +100,7 @@ resource "helm_release" "opsmx_ssd" {
 }
 
 ########################
-# Outputs (CI/CD visibility)
+# Outputs
 ########################
 output "ssd_releases" {
   value = {
