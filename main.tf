@@ -14,8 +14,8 @@ terraform {
 ########################
 # Providers
 ########################
-# When running inside a K8s Job, omit config_path to use the ServiceAccount token automatically
 provider "kubernetes" {
+  # When running in a K8s Job, this automatically uses the Pod's ServiceAccount
   config_path = var.kubeconfig_path != "" ? var.kubeconfig_path : null
 }
 
@@ -26,26 +26,24 @@ provider "helm" {
 }
 
 ########################
-# Namespace (Fixes the "already exists" error)
+# Namespace
 ########################
 resource "kubernetes_namespace" "ssd" {
   metadata {
     name = var.namespace
   }
 
-  # This block tells Terraform: "If it exists, just use it. If not, create it."
-  # This prevents the error you are seeing during automated runs.
   lifecycle {
+    # Prevents errors if the namespace already exists in the cluster
     ignore_changes = all
   }
 }
 
 ########################
-# Clone the Helm chart repository
+# 1. Clone the Repository
 ########################
 resource "null_resource" "clone_ssd_chart" {
   triggers = {
-    # This ensures a re-run/upgrade whenever the branch or repo URL changes
     git_repo   = var.git_repo_url
     git_branch = var.git_branch
   }
@@ -60,31 +58,37 @@ resource "null_resource" "clone_ssd_chart" {
 }
 
 ########################
-# OpsMx SSD Helm Release (Handles Upgrades)
+# 2. Load YAML Content (Apply-time only)
+########################
+# Using a data source with depends_on solves the "file does not exist" plan error
+data "local_file" "ssd_values" {
+  filename   = "/tmp/enterprise-ssd/charts/ssd/ssd-minimal-values.yaml"
+  depends_on = [null_resource.clone_ssd_chart]
+}
+
+########################
+# 3. OpsMx SSD Helm Release
 ########################
 resource "helm_release" "opsmx_ssd" {
   for_each = toset(var.ingress_hosts)
 
   name       = "ssd-${replace(each.value, ".", "-")}"
   namespace  = kubernetes_namespace.ssd.metadata[0].name
+  
+  # Path to the chart directory inside the cloned repo
+  chart      = "/tmp/enterprise-ssd/charts/ssd"
 
-  chart = "/tmp/enterprise-ssd/charts/ssd"
-
+  # We pass the loaded content from the data source to avoid unmarshaling errors
   values = [
-    "/tmp/enterprise-ssd/charts/ssd/ssd-minimal-values.yaml"
+    data.local_file.ssd_values.content
   ]
 
-  # Deployment Settings
   create_namespace = false
   atomic           = true
   cleanup_on_fail  = true
   wait             = true
-  
-  # Upgrade Settings
   force_update     = true
   recreate_pods    = true
-  # This ensures that if the chart content changes, Helm performs an upgrade
-  replace          = false 
 
   set {
     name  = "ingress.enabled"
@@ -101,7 +105,11 @@ resource "helm_release" "opsmx_ssd" {
     value = each.value
   }
 
-  depends_on = [null_resource.clone_ssd_chart]
+  # Ensure everything is cloned and read before Helm starts
+  depends_on = [
+    null_resource.clone_ssd_chart,
+    data.local_file.ssd_values
+  ]
 }
 
 ########################
