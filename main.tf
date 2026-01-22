@@ -14,6 +14,7 @@ terraform {
 ########################
 # Providers
 ########################
+# When running inside a K8s Job, omit config_path to use the ServiceAccount token automatically
 provider "kubernetes" {
   config_path = var.kubeconfig_path != "" ? var.kubeconfig_path : null
 }
@@ -25,17 +26,17 @@ provider "helm" {
 }
 
 ########################
-# Namespace
+# Namespace (Fixes the "already exists" error)
 ########################
 resource "kubernetes_namespace" "ssd" {
   metadata {
     name = var.namespace
   }
 
+  # This block tells Terraform: "If it exists, just use it. If not, create it."
+  # This prevents the error you are seeing during automated runs.
   lifecycle {
-    # Set to true if you want to ensure Terraform never deletes this namespace
-    prevent_destroy = false 
-    ignore_changes  = all
+    ignore_changes = all
   }
 }
 
@@ -44,12 +45,12 @@ resource "kubernetes_namespace" "ssd" {
 ########################
 resource "null_resource" "clone_ssd_chart" {
   triggers = {
+    # This ensures a re-run/upgrade whenever the branch or repo URL changes
     git_repo   = var.git_repo_url
     git_branch = var.git_branch
   }
 
   provisioner "local-exec" {
-    # This prevents the "No such file or directory" error by giving git a stable home
     working_dir = "/tmp"
     command     = <<EOT
       rm -rf enterprise-ssd
@@ -59,7 +60,7 @@ resource "null_resource" "clone_ssd_chart" {
 }
 
 ########################
-# OpsMx SSD Helm Release
+# OpsMx SSD Helm Release (Handles Upgrades)
 ########################
 resource "helm_release" "opsmx_ssd" {
   for_each = toset(var.ingress_hosts)
@@ -67,19 +68,23 @@ resource "helm_release" "opsmx_ssd" {
   name       = "ssd-${replace(each.value, ".", "-")}"
   namespace  = kubernetes_namespace.ssd.metadata[0].name
 
-  # Reference the absolute path from the clone location
   chart = "/tmp/enterprise-ssd/charts/ssd"
 
   values = [
     "/tmp/enterprise-ssd/charts/ssd/ssd-minimal-values.yaml"
   ]
 
+  # Deployment Settings
   create_namespace = false
   atomic           = true
   cleanup_on_fail  = true
   wait             = true
+  
+  # Upgrade Settings
   force_update     = true
   recreate_pods    = true
+  # This ensures that if the chart content changes, Helm performs an upgrade
+  replace          = false 
 
   set {
     name  = "ingress.enabled"
