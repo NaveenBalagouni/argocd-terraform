@@ -11,36 +11,23 @@ terraform {
   }
 }
 
-########################
-# Providers
-########################
-provider "kubernetes" {
-  # When running in a K8s Job, this automatically uses the Pod's ServiceAccount
-  config_path = var.kubeconfig_path != "" ? var.kubeconfig_path : null
-}
-
+provider "kubernetes" {}
 provider "helm" {
-  kubernetes {
-    config_path = var.kubeconfig_path != "" ? var.kubeconfig_path : null
-  }
+  kubernetes {}
 }
 
 ########################
-# Namespace
+# 1. Namespace - Data Source
 ########################
-resource "kubernetes_namespace" "ssd" {
+# Using 'data' instead of 'resource' prevents the "already exists" error
+data "kubernetes_namespace" "ssd" {
   metadata {
     name = var.namespace
   }
-
-  lifecycle {
-    # Prevents errors if the namespace already exists in the cluster
-    ignore_changes = all
-  }
 }
 
 ########################
-# 1. Clone the Repository
+# 2. Clone the Repository
 ########################
 resource "null_resource" "clone_ssd_chart" {
   triggers = {
@@ -58,29 +45,21 @@ resource "null_resource" "clone_ssd_chart" {
 }
 
 ########################
-# 2. Load YAML Content (Apply-time only)
-########################
-# Using a data source with depends_on solves the "file does not exist" plan error
-data "local_file" "ssd_values" {
-  filename   = "/tmp/enterprise-ssd/charts/ssd/ssd-minimal-values.yaml"
-  depends_on = [null_resource.clone_ssd_chart]
-}
-
-########################
 # 3. OpsMx SSD Helm Release
 ########################
 resource "helm_release" "opsmx_ssd" {
   for_each = toset(var.ingress_hosts)
 
   name       = "ssd-${replace(each.value, ".", "-")}"
-  namespace  = kubernetes_namespace.ssd.metadata[0].name
+  namespace  = data.kubernetes_namespace.ssd.metadata[0].name
   
-  # Path to the chart directory inside the cloned repo
+  # Point directly to the folder that will be created
   chart      = "/tmp/enterprise-ssd/charts/ssd"
 
-  # We pass the loaded content from the data source to avoid unmarshaling errors
+  # We pass the PATH as a string, NOT the content via a function.
+  # This prevents Terraform from looking for the file during the "Refresh" phase.
   values = [
-    data.local_file.ssd_values.content
+    "/tmp/enterprise-ssd/charts/ssd/ssd-minimal-values.yaml"
   ]
 
   create_namespace = false
@@ -96,32 +75,10 @@ resource "helm_release" "opsmx_ssd" {
   }
 
   set {
-    name  = "global.certManager.installed"
-    value = tostring(var.cert_manager_installed)
-  }
-
-  set {
     name  = "global.ssdUI.host"
     value = each.value
   }
 
-  # Ensure everything is cloned and read before Helm starts
-  depends_on = [
-    null_resource.clone_ssd_chart,
-    data.local_file.ssd_values
-  ]
-}
-
-########################
-# Outputs
-########################
-output "ssd_releases" {
-  value = {
-    for k, v in helm_release.opsmx_ssd :
-    k => {
-      name      = v.name
-      namespace = v.namespace
-      version   = v.version
-    }
-  }
+  # This ensures the clone finishes before Helm tries to read the path
+  depends_on = [null_resource.clone_ssd_chart]
 }
