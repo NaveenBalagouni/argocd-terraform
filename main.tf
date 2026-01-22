@@ -11,6 +11,9 @@ terraform {
   }
 }
 
+########################
+# Providers
+########################
 provider "kubernetes" {
   config_path = var.kubeconfig_path != "" ? var.kubeconfig_path : null
 }
@@ -21,43 +24,42 @@ provider "helm" {
   }
 }
 
-# 1. Clone/Update Helm Chart Repo
-resource "null_resource" "clone_ssd_chart" {
-  triggers = {
-    git_repo   = var.git_repo_url
-    git_branch = var.git_branch
+########################
+# Namespace (Protected)
+########################
+resource "kubernetes_namespace" "ssd" {
+  metadata {
+    name = var.namespace
   }
 
-  provisioner "local-exec" {
-    command = <<EOT
-      rm -rf /tmp/enterprise-ssd
-      git clone --branch ${var.git_branch} ${var.git_repo_url} /tmp/enterprise-ssd
-    EOT
+  lifecycle {
+    prevent_destroy = true
   }
 }
 
-# 2. SSD Helm Release
+########################
+# OpsMx SSD Helm Release
+########################
 resource "helm_release" "opsmx_ssd" {
-  for_each   = toset(var.ingress_hosts)
-  
-  # This ensures the clone happens first
-  depends_on = [null_resource.clone_ssd_chart]
+  for_each = toset(var.ingress_hosts)
 
   name       = "ssd-${replace(each.value, ".", "-")}"
-  namespace  = var.namespace
-  
-  # FIX: We use a path that Terraform won't validate until it's actually applying
-  chart      = "/tmp/enterprise-ssd/charts/ssd"
-  
+  namespace  = kubernetes_namespace.ssd.metadata[0].name
+
+  # Chart is already cloned by the Job
+  chart = "/tmp/enterprise-ssd/charts/ssd"
+
   values = [
     "/tmp/enterprise-ssd/charts/ssd/ssd-minimal-values.yaml"
   ]
 
-  create_namespace = true
-  force_update     = true
-  recreate_pods    = true
+  create_namespace = false
+
+  atomic           = true
   cleanup_on_fail  = true
   wait             = true
+  force_update     = true
+  recreate_pods    = true
 
   set {
     name  = "ingress.enabled"
@@ -73,8 +75,18 @@ resource "helm_release" "opsmx_ssd" {
     name  = "global.ssdUI.host"
     value = each.value
   }
+}
 
-  lifecycle {
-    replace_triggered_by = [null_resource.clone_ssd_chart]
+########################
+# Outputs (CI/CD visibility)
+########################
+output "ssd_releases" {
+  value = {
+    for k, v in helm_release.opsmx_ssd :
+    k => {
+      name      = v.name
+      namespace = v.namespace
+      version   = v.version
+    }
   }
 }
