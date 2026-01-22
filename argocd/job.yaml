@@ -30,11 +30,14 @@ spec:
     spec:
       serviceAccountName: terraform-sa
       restartPolicy: Never
+
       containers:
         - name: terraform
           image: hashicorp/terraform:1.6.0
           workingDir: /workspace/ssd-infra
-          command: ["/bin/sh", "-c"]
+          command:
+            - /bin/sh
+            - -c
           args:
             - |
               set -e
@@ -44,30 +47,30 @@ spec:
 
               echo "Cloning OpsMx SSD Helm chart..."
               rm -rf /tmp/enterprise-ssd
-              git clone --branch ${GIT_BRANCH} ${GIT_REPO_URL} /tmp/enterprise-ssd
+              git clone --branch "${GIT_BRANCH}" "${GIT_REPO_URL}" /tmp/enterprise-ssd
 
               echo "Cloning Terraform configuration..."
               rm -rf /workspace/ssd-infra
-              git clone --branch ${TF_BRANCH} ${TF_REPO_URL} /workspace/ssd-infra
+              git clone --branch "${TF_BRANCH}" "${TF_REPO_URL}" /workspace/ssd-infra
               cd /workspace/ssd-infra
 
-              echo "Initializing Terraform..."
               terraform init
-
-              echo "Applying Terraform (Install / Upgrade)..."
               terraform apply -auto-approve \
                 -var="namespace=${SSD_NAMESPACE}" \
                 -var="cert_manager_installed=${CERT_MANAGER_INSTALLED}"
 
               echo "Terraform SSD deployment completed successfully."
+
           env:
             - name: GIT_REPO_URL
-              value: "https://github.com/OpsMx/enterprise-ssd.git"
+              value: "https://github.com/opsmx/enterprise-ssd.git"
+
             - name: GIT_BRANCH
               value: "2025-11"
 
             - name: TF_REPO_URL
               value: "https://github.com/NaveenBalagouni/argocd-terraform.git"
+
             - name: TF_BRANCH
               value: "main"
 
@@ -78,14 +81,17 @@ spec:
               value: "true"
 
           volumeMounts:
-           - name: kubeconfig
-             mountPath: /root/.kube
-             readOnly: true
-           - name: workspace
-             mountPath: /workspace
-     volumes:
-       - name: kubeconfig
-         secret:
-           secretName: kubeconfig
-       - name: workspace
-         emptyDir: {}
+            - name: kubeconfig
+              mountPath: /root/.kube
+              readOnly: true
+
+            - name: workspace
+              mountPath: /workspace
+
+      volumes:
+        - name: kubeconfig
+          secret:
+            secretName: kubeconfig
+
+        - name: workspace
+          emptyDir: {}
