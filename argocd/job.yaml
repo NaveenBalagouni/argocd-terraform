@@ -33,36 +33,54 @@ spec:
       containers:
         - name: terraform
           image: hashicorp/terraform:1.6.0
-          workingDir: /workspace
+          workingDir: /workspace/ssd-infra
           command: ["/bin/sh", "-c"]
           args:
             - |
               set -e
-              apk add --no-cache git
-              
-              # STEP 1: Pre-clone the repo to /tmp so Terraform doesn't fail "path check"
-              echo "Preparing Helm chart files..."
+
+              echo "Installing git..."
+              apk add --no-cache git bash
+
+              echo "Cloning OpsMx SSD Helm chart..."
               rm -rf /tmp/enterprise-ssd
               git clone --branch ${GIT_BRANCH} ${GIT_REPO_URL} /tmp/enterprise-ssd
 
-              # STEP 2: Clone the Terraform project files
-              echo "Cloning Terraform project..."
-              git clone --branch ${GIT_BRANCH} ${GIT_REPO_URL} /workspace/ssd-infra
+              echo "Cloning Terraform configuration..."
+              rm -rf /workspace/ssd-infra
+              git clone --branch ${TF_BRANCH} ${TF_REPO_URL} /workspace/ssd-infra
               cd /workspace/ssd-infra
 
-              # STEP 3: Run Terraform
+              echo "Initializing Terraform..."
               terraform init
+
+              echo "Applying Terraform (Install / Upgrade)..."
               terraform apply -auto-approve \
-                -var="git_repo_url=${GIT_REPO_URL}" \
-                -var="git_branch=${GIT_BRANCH}"
+                -var="namespace=${SSD_NAMESPACE}" \
+                -var="cert_manager_installed=${CERT_MANAGER_INSTALLED}"
+
+              echo "Terraform SSD deployment completed successfully."
           env:
             - name: GIT_REPO_URL
               value: "https://github.com/NaveenBalagouni/argocd-terraform.git"
             - name: GIT_BRANCH
-              value: "main" # Update this for your upgrade
+              value: "main"
+
+            - name: TF_REPO_URL
+              value: "ttps://github.com/OpsMx/enterprise-ssd.git""
+            - name: TF_BRANCH
+              value: "2025-11"
+
+            - name: SSD_NAMESPACE
+              value: "tf-ssd"
+
+            - name: CERT_MANAGER_INSTALLED
+              value: "true"
+
           volumeMounts:
             - name: workspace
               mountPath: /workspace
+
       volumes:
         - name: workspace
           emptyDir: {}
