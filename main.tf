@@ -37,12 +37,24 @@ resource "kubernetes_namespace" "ssd" {
     ignore_changes  = [metadata[0].annotations, metadata[0].labels]
   }
 }
+
+########################
 # Clone the Helm chart repository
+########################
 resource "null_resource" "clone_ssd_chart" {
   triggers = {
-    git_repo  = var.git_repo_url
+    git_repo   = var.git_repo_url
     git_branch = var.git_branch
   }
+
+  provisioner "local-exec" {
+    command = <<EOT
+      rm -rf /tmp/enterprise-ssd
+      git clone --branch ${var.git_branch} ${var.git_repo_url} /tmp/enterprise-ssd
+    EOT
+  }
+}  # <-- Closing brace added here
+
 ########################
 # OpsMx SSD Helm Release
 ########################
@@ -52,7 +64,6 @@ resource "helm_release" "opsmx_ssd" {
   name       = "ssd-${replace(each.value, ".", "-")}"
   namespace  = kubernetes_namespace.ssd.metadata[0].name
 
-  # Chart is already cloned by the Job
   chart = "/tmp/enterprise-ssd/charts/ssd"
 
   values = [
@@ -81,6 +92,8 @@ resource "helm_release" "opsmx_ssd" {
     name  = "global.ssdUI.host"
     value = each.value
   }
+
+  depends_on = [null_resource.clone_ssd_chart]
 }
 
 ########################
