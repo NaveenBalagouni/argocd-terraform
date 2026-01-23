@@ -25,15 +25,20 @@ provider "helm" {
   }
 }
 
-# 1. Ensure the namespace exists (Automated creation)
+# ----------------------------------------
+# 1. Ensure the namespace exists (ignore if already present)
 resource "kubernetes_namespace" "opmsx_ns" {
   metadata {
     name = var.namespace
   }
+
+  lifecycle {
+    ignore_changes = [metadata]
+  }
 }
 
-# 2. Clone/Update Helm Chart Repo
-# The 'triggers' block ensures this runs again if the branch or URL changes
+# ----------------------------------------
+# 2. Clone Helm chart repository to /workspace
 resource "null_resource" "clone_ssd_chart" {
   triggers = {
     git_repo   = var.git_repo_url
@@ -42,30 +47,29 @@ resource "null_resource" "clone_ssd_chart" {
 
   provisioner "local-exec" {
     command = <<EOT
-      rm -rf /tmp/enterprise-ssd
-      git clone --branch ${var.git_branch} ${var.git_repo_url} /tmp/enterprise-ssd
+      rm -rf /workspace/enterprise-ssd
+      git clone --branch ${var.git_branch} ${var.git_repo_url} /workspace/enterprise-ssd
     EOT
   }
 }
 
-# 3. Dynamic Values loading
+# ----------------------------------------
+# 3. Load Helm values dynamically from cloned repo
 data "local_file" "ssd_values" {
-  filename   = "/tmp/enterprise-ssd/charts/ssd/ssd-minimal-values.yaml"
+  filename   = "/workspace/enterprise-ssd/charts/ssd/ssd-minimal-values.yaml"
   depends_on = [null_resource.clone_ssd_chart]
 }
 
-# 4. SSD Helm Release with Upgrade Logic
+# ----------------------------------------
+# 4. Deploy Helm release(s) with upgrade support
 resource "helm_release" "opsmx_ssd" {
   for_each   = toset(var.ingress_hosts)
   depends_on = [null_resource.clone_ssd_chart, kubernetes_namespace.opmsx_ns]
 
   name       = "ssd-${replace(each.value, ".", "-")}"
   namespace  = kubernetes_namespace.opmsx_ns.metadata[0].name
-  chart      = "/tmp/enterprise-ssd/charts/ssd"
-  
-  
-  # Inject values from the cloned git repo
-  values = [data.local_file.ssd_values.content]
+  chart      = "/workspace/enterprise-ssd/charts/ssd"
+  values     = [data.local_file.ssd_values.content]
 
   set {
     name  = "ingress.enabled"
@@ -82,15 +86,13 @@ resource "helm_release" "opsmx_ssd" {
     value = each.value
   }
 
-  # Upgrade Strategy Settings
   force_update      = true
   recreate_pods     = true
   cleanup_on_fail   = true
   wait              = true
-  atomic            = true # Rolls back automatically if upgrade fails
+  atomic            = true  # rollback if upgrade fails
 
   lifecycle {
-    # This forces a re-deployment if the git metadata changes
     replace_triggered_by = [null_resource.clone_ssd_chart]
   }
 }
