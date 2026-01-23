@@ -1,4 +1,13 @@
 terraform {
+  required_version = ">= 1.0.0"
+  
+  # CRITICAL: Store state in K8s so the Job remembers previous runs
+  backend "kubernetes" {
+    secret_suffix    = "ssd-state"
+    namespace        = "tf-ssd"
+    in_cluster_config = true
+  }
+
   required_providers {
     helm = {
       source  = "hashicorp/helm"
@@ -16,29 +25,22 @@ terraform {
 }
 
 provider "kubernetes" {
-  config_path = var.kubeconfig_path != "" ? var.kubeconfig_path : null
+  # When running inside a Job, it uses the ServiceAccount token automatically
 }
 
 provider "helm" {
   kubernetes {
-    config_path = var.kubeconfig_path != "" ? var.kubeconfig_path : null
+    # Uses ServiceAccount token automatically
   }
 }
 
-# ----------------------------------------
-# 1. Ensure the namespace exists (ignore if already present)
 resource "kubernetes_namespace" "opmsx_ns" {
   metadata {
     name = var.namespace
   }
-
-  lifecycle {
-    ignore_changes = [metadata]
-  }
 }
 
-# ----------------------------------------
-# 2. Clone Helm chart repository to /workspace
+# Clone the Helm Chart from Git
 resource "null_resource" "clone_ssd_chart" {
   triggers = {
     git_repo   = var.git_repo_url
@@ -47,29 +49,26 @@ resource "null_resource" "clone_ssd_chart" {
 
   provisioner "local-exec" {
     command = <<EOT
-      rm -rf /workspace/enterprise-ssd
-      git clone --branch ${var.git_branch} ${var.git_repo_url} /workspace/enterprise-ssd
+      rm -rf /tmp/enterprise-ssd
+      git clone --branch ${var.git_branch} ${var.git_repo_url} /tmp/enterprise-ssd
     EOT
   }
 }
 
-# ----------------------------------------
-# 3. Load Helm values dynamically from cloned repo
 data "local_file" "ssd_values" {
-  filename   = "/workspace/enterprise-ssd/charts/ssd/ssd-minimal-values.yaml"
+  filename   = "/tmp/enterprise-ssd/charts/ssd/ssd-minimal-values.yaml"
   depends_on = [null_resource.clone_ssd_chart]
 }
 
-# ----------------------------------------
-# 4. Deploy Helm release(s) with upgrade support
 resource "helm_release" "opsmx_ssd" {
   for_each   = toset(var.ingress_hosts)
   depends_on = [null_resource.clone_ssd_chart, kubernetes_namespace.opmsx_ns]
 
   name       = "ssd-${replace(each.value, ".", "-")}"
   namespace  = kubernetes_namespace.opmsx_ns.metadata[0].name
-  chart      = "/workspace/enterprise-ssd/charts/ssd"
-  values     = [data.local_file.ssd_values.content]
+  chart      = "/tmp/enterprise-ssd/charts/ssd"
+  
+  values = [data.local_file.ssd_values.content]
 
   set {
     name  = "ingress.enabled"
@@ -78,7 +77,7 @@ resource "helm_release" "opsmx_ssd" {
 
   set {
     name  = "global.certManager.installed"
-    value = tostring(var.cert_manager_installed)
+    value = var.cert_manager_installed
   }
 
   set {
@@ -86,13 +85,15 @@ resource "helm_release" "opsmx_ssd" {
     value = each.value
   }
 
-  force_update      = true
-  recreate_pods     = true
-  cleanup_on_fail   = true
-  wait              = true
-  atomic            = true  # rollback if upgrade fails
+  # Safe Upgrade Settings
+  force_update    = true
+  recreate_pods   = true
+  cleanup_on_fail = true
+  wait            = true
+  atomic          = true
 
   lifecycle {
+    # If the git branch changes, Terraform will treat this as an upgrade trigger
     replace_triggered_by = [null_resource.clone_ssd_chart]
   }
 }
