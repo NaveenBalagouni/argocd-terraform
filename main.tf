@@ -87,7 +87,7 @@ resource "helm_release" "opsmx_ssd" {
   recreate_pods     = true
   cleanup_on_fail   = true
   wait              = true
-  atomic            = false # Rolls back automatically if upgrade fails
+  atomic            = true # Rolls back automatically if upgrade fails
 
   lifecycle {
     # This forces a re-deployment if the git metadata changes
