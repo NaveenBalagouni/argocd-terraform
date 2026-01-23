@@ -59,8 +59,6 @@ spec:
               value: "https://github.com/NaveenBalagouni/argocd-terraform.git"
             - name: TF_BRANCH
               value: "main"
-            - name: SSD_VERSION_BRANCH  # The branch of the HELM CHART repo
-              value: "2025-11"
             - name: SSD_NAMESPACE
               value: "tf-ssd"
           volumeMounts:
