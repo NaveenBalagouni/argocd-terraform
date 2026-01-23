@@ -25,13 +25,13 @@ metadata:
   name: terraform-upgrade-ssd
   namespace: tf-ssd
   annotations:
-    argocd.argoproj.io/hook: PostSync # Changed to PostSync to ensure environment is ready
+    argocd.argoproj.io/hook: PostSync
     argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
 spec:
   backoffLimit: 0
   template:
     spec:
-      serviceAccountName: terraform-sa
+      serviceAccountName: terraform-sa # Ensure this SA has 'cluster-admin' or 'edit' permissions
       restartPolicy: Never
       containers:
         - name: terraform
@@ -43,47 +43,29 @@ spec:
             - |
               set -e
               apk add --no-cache git bash
-
-              # 1. Setup workspace
+              
               cd /workspace
-              rm -rf ./* .git .terraform
-
-              # 2. Clone repo
-              echo "Cloning Terraform configuration..."
               git clone --branch "${TF_BRANCH}" "${TF_REPO_URL}" .
-
-              # 3. Initialize Terraform
+              
               terraform init
+              
+              # Try to import existing namespace if it exists to avoid 'already exists' error
+              terraform import kubernetes_namespace.opmsx_ns "${SSD_NAMESPACE}" || echo "Namespace already managed."
 
-              # 4. IMPORT LOGIC
-              # Matches the name in your main.tf: kubernetes_namespace.opmsx_ns
-              echo "Checking if namespace needs to be imported..."
-              terraform import kubernetes_namespace.opmsx_ns "${SSD_NAMESPACE}" || echo "Namespace already managed or import not needed."
-
-              # 5. APPLY
-              terraform apply -auto-approve
+              terraform apply -auto-approve \
+                -var="git_branch=${SSD_VERSION_BRANCH}"
           env:
             - name: TF_REPO_URL
               value: "https://github.com/NaveenBalagouni/argocd-terraform.git"
             - name: TF_BRANCH
               value: "main"
+            - name: SSD_VERSION_BRANCH  # The branch of the HELM CHART repo
+              value: "2025-11"
             - name: SSD_NAMESPACE
               value: "tf-ssd"
-            - name: TF_VAR_namespace
-              value: "tf-ssd"
-            - name: TF_VAR_cert_manager_installed
-              value: "true"
-            # Point to the secret-mounted kubeconfig
-            - name: KUBECONFIG
-              value: /root/.kube/config
           volumeMounts:
-            - name: kubeconfig
-              mountPath: /root/.kube
             - name: workspace
               mountPath: /workspace
       volumes:
-        - name: kubeconfig
-          secret:
-            secretName: kubeconfig # Ensure this secret has a key named 'config'
         - name: workspace
-          emptyDir: {} 
+          emptyDir: {}
