@@ -4,7 +4,7 @@ terraform {
   # CRITICAL: Store state in K8s so the Job remembers previous runs
   backend "kubernetes" {
     secret_suffix    = "ssd-state"
-    namespace        = "tf-ssd"
+    namespace        = "ssd-tf-argocd"
     in_cluster_config = true
   }
 
