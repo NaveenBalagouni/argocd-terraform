@@ -28,7 +28,7 @@ variable "ingress_hosts" {
 variable "namespace" {
   description = "Kubernetes namespace to deploy SSD"
   type        = string
-  default     = "tf-ssd"
+  default     = "ssd-tf-argocd"
 }
 
 
